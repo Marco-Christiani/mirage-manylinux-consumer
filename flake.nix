@@ -12,9 +12,11 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    manylinux-env.url = "path:/home/marco/Github/ipy/experiments/manylinux-env";
+    manylinux-env = {
+      url = "github:Marco-Christiani/nix-manylinux-envs";
+    };
     mirage-src = {
-      url = "path:/home/marco/Github/mirage-ci-infra";
+      url = "github:Marco-Christiani/mirage?ref=marco/ci-infra-fixes";
       flake = false;
     };
   };

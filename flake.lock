@@ -40,21 +40,26 @@
         "type": "github"
       },
       "original": {
-        "path": "/home/marco/Github/ipy/experiments/manylinux-env",
-        "type": "path"
+        "owner": "Marco-Christiani",
+        "repo": "nix-manylinux-envs",
+        "type": "github"
       }
     },
     "mirage-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1777672209,
-        "narHash": "sha256-7HzXRseBs8igx0M4yi/AQO2fyMLJ8kkraISwF0zPxSE=",
-        "path": "/home/marco/Github/mirage-ci-infra",
-        "type": "path"
+        "lastModified": 1777070335,
+        "narHash": "sha256-JqRZxBVgLah8ePB9zq39DQEzbMp5oHDSslvJN1M7dCE=",
+        "owner": "Marco-Christiani",
+        "repo": "mirage",
+        "rev": "d47f85f6383163c9be3f05b8733c35a518db412c",
+        "type": "github"
       },
       "original": {
-        "path": "/home/marco/Github/mirage-ci-infra",
-        "type": "path"
+        "owner": "Marco-Christiani",
+        "ref": "marco/ci-infra-fixes",
+        "repo": "mirage",
+        "type": "github"
       }
     },
     "nixpkgs": {
