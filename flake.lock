@@ -32,17 +32,16 @@
         "nixpkgs-24_05": "nixpkgs-24_05"
       },
       "locked": {
-        "lastModified": 1777689685,
-        "narHash": "sha256-seZ0inckNlm9qE0Fpi8MOGawqh2N7opqdGa6oITT/Kc=",
+        "lastModified": 1777762034,
+        "narHash": "sha256-kRT4nXKBCpT1kfmtBu5nxvQcSuNsRwrwdDyNKSJ/NyY=",
         "owner": "Marco-Christiani",
         "repo": "nix-manylinux-envs",
-        "rev": "ecf9ed6240ef3ee653d5a92edf18fe0267bd2a14",
+        "rev": "322dd7cb41d85cfad60efb7e5849aecece39ee3c",
         "type": "github"
       },
       "original": {
-        "owner": "Marco-Christiani",
-        "repo": "nix-manylinux-envs",
-        "type": "github"
+        "path": "/home/marco/Github/ipy/experiments/manylinux-env",
+        "type": "path"
       }
     },
     "mirage-src": {

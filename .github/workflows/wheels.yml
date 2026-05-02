@@ -1,0 +1,92 @@
+name: Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      manylinux_env_input:
+        description: Nix flake input for nix-manylinux-envs
+        required: true
+        default: github:Marco-Christiani/nix-manylinux-envs
+        type: string
+      run_gpu_smoke:
+        description: Run CDI GPU container smoke test on a self-hosted runner
+        required: true
+        default: false
+        type: boolean
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Evaluate flake
+        env:
+          MANYLINUX_ENV_INPUT: ${{ inputs.manylinux_env_input || 'github:Marco-Christiani/nix-manylinux-envs' }}
+        run: nix flake check --no-build --print-build-logs --override-input manylinux-env "$MANYLINUX_ENV_INPUT"
+
+      - name: Build Mirage wheel
+        env:
+          MANYLINUX_ENV_INPUT: ${{ inputs.manylinux_env_input || 'github:Marco-Christiani/nix-manylinux-envs' }}
+        run: nix build .#mirage-wheel --print-build-logs --override-input manylinux-env "$MANYLINUX_ENV_INPUT"
+
+      - name: Copy wheel artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp -a result/dist artifacts/raw
+          cp -a result/repaired artifacts/repaired
+          cp -a result/logs artifacts/logs
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirage-wheels-${{ github.run_id }}
+          path: artifacts/**
+          if-no-files-found: error
+
+  gpu-smoke:
+    name: GPU container smoke
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gpu_smoke }}
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - nvidia
+    timeout-minutes: 120
+
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mirage-wheels-${{ github.run_id }}
+          path: artifacts
+
+      - name: Import Mirage in Python slim container
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --device nvidia.com/gpu=all \
+            -v "$PWD/artifacts/repaired:/wheel:ro" \
+            python:3.12-slim \
+            sh -lc '
+              python -m pip install --no-cache-dir z3-solver numpy torch graphviz &&
+              python -m pip install --no-cache-dir --no-deps /wheel/*.whl &&
+              python -c "import mirage; print(mirage); from mirage import *; print(\"mirage import star ok\", \"DTensor\" in globals())"
+            '

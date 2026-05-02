@@ -4,17 +4,15 @@
   nixConfig = {
     extra-substituters = [
       "https://cuda-maintainers.cachix.org"
-      "https://cache.nixos-cuda.org"
     ];
     extra-trusted-public-keys = [
       "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
-      "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
   };
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    manylinux-env.url = "github:Marco-Christiani/nix-manylinux-envs";
+    manylinux-env.url = "path:/home/marco/Github/ipy/experiments/manylinux-env";
     mirage-src = {
       url = "path:/home/marco/Github/mirage-ci-infra";
       flake = false;
@@ -37,6 +35,25 @@
         systems
       );
   in {
+    packages = forAllSystems (system: let
+      pkgs = import nixpkgs {
+        inherit system;
+        config = {
+          cudaSupport = true;
+          allowUnfree = true;
+        };
+      };
+    in {
+      default = self.packages.${system}.mirage-wheel;
+      mirage-wheel = pkgs.callPackage ./nix/mirage-wheel.nix {
+        inherit manylinux-env mirage-src system;
+      };
+      mirage-wheel-raw = pkgs.callPackage ./nix/mirage-wheel.nix {
+        inherit manylinux-env mirage-src system;
+        repairMode = "none";
+      };
+    });
+
     apps = forAllSystems (system: let
       pkgs = import nixpkgs {
         inherit system;
