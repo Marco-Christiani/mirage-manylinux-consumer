@@ -16,7 +16,7 @@
       url = "github:Marco-Christiani/nix-manylinux-envs";
     };
     mirage-src = {
-      url = "github:Marco-Christiani/mirage?ref=marco/ci-infra-fixes";
+      url = "git+https://github.com/Marco-Christiani/mirage.git?ref=marco/ci-infra-fixes&submodules=1";
       flake = false;
     };
   };
