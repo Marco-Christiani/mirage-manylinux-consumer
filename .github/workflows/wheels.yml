@@ -20,9 +20,19 @@ on:
 
 jobs:
   build:
-    name: Build wheel
+    name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cp312-manylinux_2_28-cuda129
+            package: cp312-manylinux_2_28-cuda129
+            python-image: python:3.12-slim
+          - name: cp312-manylinux_2_34-cuda129
+            package: cp312-manylinux_2_34-cuda129
+            python-image: python:3.12-slim
 
     steps:
       - name: Checkout
@@ -43,7 +53,7 @@ jobs:
       - name: Build Mirage wheel
         env:
           MANYLINUX_ENV_INPUT: ${{ inputs.manylinux_env_input || 'github:Marco-Christiani/nix-manylinux-envs' }}
-        run: nix build .#mirage-wheel --print-build-logs --override-input manylinux-env "$MANYLINUX_ENV_INPUT"
+        run: nix build ".#${{ matrix.package }}" --print-build-logs --override-input manylinux-env "$MANYLINUX_ENV_INPUT"
 
       - name: Copy wheel artifacts
         run: |
@@ -56,12 +66,12 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mirage-wheels-${{ github.run_id }}
+          name: mirage-wheels-${{ matrix.name }}-${{ github.run_id }}
           path: artifacts/**
           if-no-files-found: error
 
   gpu-smoke:
-    name: GPU container smoke
+    name: GPU smoke ${{ matrix.name }}
     needs: build
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_gpu_smoke }}
     runs-on:
@@ -70,12 +80,20 @@ jobs:
       - x64
       - nvidia
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cp312-manylinux_2_28-cuda129
+            python-image: python:3.12-slim
+          - name: cp312-manylinux_2_34-cuda129
+            python-image: python:3.12-slim
 
     steps:
       - name: Download wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          name: mirage-wheels-${{ github.run_id }}
+          name: mirage-wheels-${{ matrix.name }}-${{ github.run_id }}
           path: artifacts
 
       - name: Import Mirage in Python slim container
@@ -84,7 +102,7 @@ jobs:
           docker run --rm \
             --device nvidia.com/gpu=all \
             -v "$PWD/artifacts/repaired:/wheel:ro" \
-            python:3.12-slim \
+            "${{ matrix.python-image }}" \
             sh -lc '
               python -m pip install --no-cache-dir z3-solver numpy torch graphviz &&
               python -m pip install --no-cache-dir --no-deps /wheel/*.whl &&

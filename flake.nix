@@ -28,6 +28,18 @@
     mirage-src,
   }: let
     systems = ["x86_64-linux"];
+    releaseTargets = {
+      cp312-manylinux_2_28-cuda129 = {
+        targetAttr = "manylinux_2_28_candidate";
+        rustTarget = "x86_64-unknown-linux-gnu.2.28";
+        pythonImage = "python:3.12-slim";
+      };
+      cp312-manylinux_2_34-cuda129 = {
+        targetAttr = "manylinux_2_34_candidate";
+        rustTarget = "x86_64-unknown-linux-gnu.2.34";
+        pythonImage = "python:3.12-slim";
+      };
+    };
     forAllSystems = f:
       builtins.listToAttrs (
         map (system: {
@@ -45,16 +57,39 @@
           allowUnfree = true;
         };
       };
-    in {
-      default = self.packages.${system}.mirage-wheel;
-      mirage-wheel = pkgs.callPackage ./nix/mirage-wheel.nix {
-        inherit manylinux-env mirage-src system;
-      };
-      mirage-wheel-raw = pkgs.callPackage ./nix/mirage-wheel.nix {
-        inherit manylinux-env mirage-src system;
-        repairMode = "none";
-      };
-    });
+    in
+      {
+        default = self.packages.${system}.mirage-wheel;
+        mirage-wheel = pkgs.callPackage ./nix/mirage-wheel.nix {
+          inherit manylinux-env mirage-src system;
+        };
+        mirage-wheel-raw = pkgs.callPackage ./nix/mirage-wheel.nix {
+          inherit manylinux-env mirage-src system;
+          repairMode = "none";
+        };
+      }
+      // builtins.mapAttrs (
+        name: target:
+          pkgs.callPackage ./nix/mirage-wheel.nix {
+            inherit manylinux-env mirage-src system;
+            inherit (target) targetAttr rustTarget;
+          }
+      )
+      releaseTargets
+      // builtins.mapAttrs (
+        name: target:
+          pkgs.callPackage ./nix/mirage-wheel.nix {
+            inherit manylinux-env mirage-src system;
+            inherit (target) targetAttr rustTarget;
+            repairMode = "none";
+          }
+      )
+      (builtins.listToAttrs (
+        map (name: {
+          name = "${name}-raw";
+          value = releaseTargets.${name};
+        }) (builtins.attrNames releaseTargets)
+      )));
 
     apps = forAllSystems (system: let
       pkgs = import nixpkgs {
