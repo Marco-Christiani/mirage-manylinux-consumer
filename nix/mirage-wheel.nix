@@ -4,13 +4,14 @@
   manylinux-env,
   mirage-src,
   system,
+  pythonInterpreter ? pkgs.python312,
   targetAttr ? "manylinux_2_28_candidate",
-  cudaPackages ? pkgs.cudaPackages_12_9,
+  cudaAttr ? "cudaPackages_12_9",
+  cudaPackageSet ? pkgs.${cudaAttr},
   rustTarget ? "x86_64-unknown-linux-gnu.2.28",
   repairMode ? "target",
 }: let
   targetShell = manylinux-env.devShells.${system}.${targetAttr};
-  python = pkgs.python312;
   abstractSubexprCargoDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "mirage-abstract-subexpr-cargo-vendor";
     src = mirage-src;
@@ -30,6 +31,7 @@
 in
   manylinux-env.lib.mkManylinuxWheel {
     inherit lib pkgs repairMode;
+    python = pythonInterpreter;
     pname = "mirage-project-manylinux-wheel";
     version = "0.2.4";
 
@@ -37,7 +39,7 @@ in
     inherit targetShell;
 
     nativeBuildInputs = [
-      cudaPackages.cudatoolkit
+      cudaPackageSet.cudatoolkit
       pkgs.bash
       pkgs.cargo
       pkgs.cargo-zigbuild
@@ -47,17 +49,18 @@ in
       pkgs.rustc
       pkgs.unzip
       pkgs.zig
-      python.pkgs.cython
+      pythonInterpreter.pkgs.cython
     ];
 
     auditwheelExclude = ["libcuda.so*"];
 
     postPatch = ''
+      rm -rf ./*.egg-info python/*.egg-info
       substituteInPlace setup.py \
         --replace-fail \
           'z3_path = path.dirname(z3.__file__)' \
           'z3_path = os.environ.get("Z3_ROOT", path.dirname(z3.__file__))'
-      ${python.interpreter} - <<'PY'
+      ${pythonInterpreter.interpreter} - <<'PY'
       from pathlib import Path
 
       setup = Path("setup.py")
@@ -79,7 +82,7 @@ in
     preBuild = ''
       export CFLAGS="-ffile-prefix-map=$PWD=. -fdebug-prefix-map=$PWD=."
       export CXXFLAGS="$CFLAGS"
-      export CUDA_HOME="${cudaPackages.cudatoolkit}"
+      export CUDA_HOME="${cudaPackageSet.cudatoolkit}"
       export CUDACXX="$CUDA_HOME/bin/nvcc"
       export CMAKE_BUILD_TYPE="Release"
       export CPATH="$CUDA_HOME/include''${CPATH:+:$CPATH}"

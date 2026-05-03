@@ -28,18 +28,49 @@
     mirage-src,
   }: let
     systems = ["x86_64-linux"];
-    releaseTargets = {
-      cp312-manylinux_2_28-cuda129 = {
-        targetAttr = "manylinux_2_28_candidate";
-        rustTarget = "x86_64-unknown-linux-gnu.2.28";
+    pythonTargets = {
+      cp312 = {
+        pythonAttr = "python312";
         pythonImage = "python:3.12-slim";
       };
-      cp312-manylinux_2_34-cuda129 = {
-        targetAttr = "manylinux_2_34_candidate";
-        rustTarget = "x86_64-unknown-linux-gnu.2.34";
-        pythonImage = "python:3.12-slim";
+      cp313 = {
+        pythonAttr = "python313";
+        pythonImage = "python:3.13-slim";
       };
     };
+    policyTargets = {
+      manylinux_2_28 = {
+        targetAttr = "manylinux_2_28_candidate";
+        rustTarget = "x86_64-unknown-linux-gnu.2.28";
+      };
+      manylinux_2_34 = {
+        targetAttr = "manylinux_2_34_candidate";
+        rustTarget = "x86_64-unknown-linux-gnu.2.34";
+      };
+    };
+    cudaTargets = {
+      cuda128.cudaAttr = "cudaPackages_12_8";
+      cuda129.cudaAttr = "cudaPackages_12_9";
+    };
+    releaseTargets = builtins.listToAttrs (
+      builtins.concatMap (
+        pyName:
+          builtins.concatMap (
+            policyName:
+              map (cudaName: let
+                py = pythonTargets.${pyName};
+                policy = policyTargets.${policyName};
+                cuda = cudaTargets.${cudaName};
+              in {
+                name = "${pyName}-${policyName}-${cudaName}";
+                value = py // policy // cuda;
+              })
+              (builtins.attrNames cudaTargets)
+          )
+          (builtins.attrNames policyTargets)
+      )
+      (builtins.attrNames pythonTargets)
+    );
     forAllSystems = f:
       builtins.listToAttrs (
         map (system: {
@@ -72,7 +103,8 @@
         name: target:
           pkgs.callPackage ./nix/mirage-wheel.nix {
             inherit manylinux-env mirage-src system;
-            inherit (target) targetAttr rustTarget;
+            inherit (target) cudaAttr targetAttr rustTarget;
+            pythonInterpreter = pkgs.${target.pythonAttr};
           }
       )
       releaseTargets
@@ -80,7 +112,8 @@
         name: target:
           pkgs.callPackage ./nix/mirage-wheel.nix {
             inherit manylinux-env mirage-src system;
-            inherit (target) targetAttr rustTarget;
+            inherit (target) cudaAttr targetAttr rustTarget;
+            pythonInterpreter = pkgs.${target.pythonAttr};
             repairMode = "none";
           }
       )
