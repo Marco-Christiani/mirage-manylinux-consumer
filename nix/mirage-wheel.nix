@@ -6,12 +6,14 @@
   system,
   pythonInterpreter ? pkgs.python312,
   targetAttr ? "manylinux_2_28_candidate",
-  cudaAttr ? "cudaPackages_12_9",
-  cudaPackageSet ? pkgs.${cudaAttr},
+  cudaPackages ? pkgs.cudaPackages_12_9,
   rustTarget ? "x86_64-unknown-linux-gnu.2.28",
   repairMode ? "target",
 }: let
   targetShell = manylinux-env.devShells.${system}.${targetAttr};
+  cargoWrapper = import ./mirage-cargo-wrapper.nix {
+    inherit pkgs rustTarget;
+  };
   abstractSubexprCargoDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "mirage-abstract-subexpr-cargo-vendor";
     src = mirage-src;
@@ -39,7 +41,7 @@ in
     inherit targetShell;
 
     nativeBuildInputs = [
-      cudaPackageSet.cudatoolkit
+      cudaPackages.cudatoolkit
       pkgs.bash
       pkgs.cargo
       pkgs.cargo-zigbuild
@@ -55,11 +57,19 @@ in
     auditwheelExclude = ["libcuda.so*"];
 
     postPatch = ''
+      # TODO(upstream): remove when Mirage stops committing generated egg-info.
+      # Stale egg-info can force the wrong wheel tag, e.g. cp312 metadata in a cp313 build.
       rm -rf ./*.egg-info python/*.egg-info
+
+      # TODO(upstream): remove when Mirage links the extension against a dynamic/system Z3.
+      # This lets the Nix build use the vendored z3-solver wheel location explicitly.
       substituteInPlace setup.py \
         --replace-fail \
           'z3_path = path.dirname(z3.__file__)' \
           'z3_path = os.environ.get("Z3_ROOT", path.dirname(z3.__file__))'
+
+      # TODO(upstream): remove when Mirage no longer injects build-tree rpaths for Rust cdylibs.
+      # Those rpaths are not redistributable and break auditwheel repair.
       ${pythonInterpreter.interpreter} - <<'PY'
       from pathlib import Path
 
@@ -82,7 +92,7 @@ in
     preBuild = ''
       export CFLAGS="-ffile-prefix-map=$PWD=. -fdebug-prefix-map=$PWD=."
       export CXXFLAGS="$CFLAGS"
-      export CUDA_HOME="${cudaPackageSet.cudatoolkit}"
+      export CUDA_HOME="${cudaPackages.cudatoolkit}"
       export CUDACXX="$CUDA_HOME/bin/nvcc"
       export CMAKE_BUILD_TYPE="Release"
       export CPATH="$CUDA_HOME/include''${CPATH:+:$CPATH}"
@@ -116,66 +126,9 @@ in
       export LIBRARY_PATH="$CUDA_HOME/lib/stubs''${LIBRARY_PATH:+:$LIBRARY_PATH}"
       export LD_LIBRARY_PATH="$Z3_ROOT/lib:${lib.getLib pkgs.stdenv.cc.cc}/lib:$CUDA_HOME/lib/stubs''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-      wrapper_dir="$TMPDIR/mirage-wrappers"
-      mkdir -p "$wrapper_dir"
-      cat > "$wrapper_dir/cargo" <<'CARGO'
-      #!${pkgs.bash}/bin/bash
-      set -euo pipefail
-
-      real_cargo="${pkgs.cargo}/bin/cargo"
-      rust_target="${rustTarget}"
-
-      if [ "''${1:-}" = "build" ]; then
-        shift
-        target_dir=""
-        args=()
-        while [ "$#" -gt 0 ]; do
-          case "$1" in
-            --target-dir)
-              target_dir="$2"
-              args+=("$1" "$2")
-              shift 2
-              ;;
-            --target-dir=*)
-              target_dir="''${1#--target-dir=}"
-              args+=("$1")
-              shift
-              ;;
-            *)
-              args+=("$1")
-              shift
-              ;;
-          esac
-        done
-
-        ${pkgs.coreutils}/bin/env \
-          -u LD_LIBRARY_PATH \
-          -u NIX_CFLAGS_COMPILE \
-          -u NIX_ENFORCE_NO_NATIVE \
-          -u NIX_LDFLAGS \
-          PATH="${pkgs.cargo-zigbuild}/bin:${pkgs.zig}/bin:${pkgs.rustc}/bin:${pkgs.cargo}/bin:${pkgs.stdenv.cc}/bin:$PATH" \
-          CC="${pkgs.stdenv.cc}/bin/cc" \
-          CXX="${pkgs.stdenv.cc}/bin/c++" \
-          "$real_cargo" zigbuild --target "$rust_target" "''${args[@]}"
-
-        if [ -n "$target_dir" ]; then
-          mkdir -p "$target_dir/release"
-          echo "mirage cargo wrapper: scanning $target_dir for Rust cdylibs" >&2
-          while IFS= read -r so_path; do
-            echo "mirage cargo wrapper: copying $so_path to $target_dir/release/" >&2
-            ${pkgs.binutils}/bin/strip -s "$so_path" || true
-            rm -f "$target_dir/release/$(basename "$so_path")"
-            cp -a "$so_path" "$target_dir/release/"
-          done < <(find "$target_dir" -type f -name 'lib*.so' ! -path "$target_dir/release/*")
-          ls -l "$target_dir/release" >&2
-        fi
-        exit 0
-      fi
-
-      exec "$real_cargo" "$@"
-      CARGO
-      chmod +x "$wrapper_dir/cargo"
-      export PATH="$wrapper_dir:$CUDA_HOME/bin:${pkgs.rustc}/bin:${pkgs.cargo}/bin:$PATH"
+      # TODO(upstream): remove when Mirage's Rust subbuilds expose their cdylibs in
+      # the locations expected by setup.py without a cargo wrapper.
+      export PATH="${cargoWrapper}/bin:$CUDA_HOME/bin:${pkgs.rustc}/bin:${pkgs.cargo}/bin:$PATH"
     '';
 
     meta = {
