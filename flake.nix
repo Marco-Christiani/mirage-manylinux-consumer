@@ -82,6 +82,28 @@
         };
       };
   in {
+    apps = forAllSystems (system: let
+      pkgs = mkPkgs system;
+      verifyMirageWheel = pkgs.writeShellApplication {
+        name = "verify-mirage-wheel";
+        text = ''
+          exec ${manylinux-env.packages.${system}.verifyWheelInContainer}/bin/verify-wheel-in-container \
+            "$@" \
+            --dependency z3-solver \
+            --dependency numpy \
+            --dependency torch \
+            --dependency graphviz \
+            --import-code 'import mirage; from mirage import *; print("mirage", "DTensor" in globals())'
+        '';
+      };
+    in {
+      verify-mirage-wheel = {
+        type = "app";
+        program = "${verifyMirageWheel}/bin/verify-mirage-wheel";
+        meta.description = "Verify a Mirage wheel in a Python container with Mirage runtime dependencies";
+      };
+    });
+
     packages = forAllSystems (system: let
       pkgs = mkPkgs system;
       manylinuxTargets = manylinux-env.legacyPackages.${system}.buildTargets;
