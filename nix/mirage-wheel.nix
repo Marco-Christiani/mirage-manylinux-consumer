@@ -6,11 +6,11 @@
   system,
   pythonInterpreter ? pkgs.python312,
   targetAttr ? "manylinux_2_28_candidate",
+  targetShell ? manylinux-env.devShells.${system}.${targetAttr},
   cudaPackages ? pkgs.cudaPackages_12_9,
   rustTarget ? "x86_64-unknown-linux-gnu.2.28",
   repairMode ? "target",
 }: let
-  targetShell = manylinux-env.devShells.${system}.${targetAttr};
   cargoWrapper = import ./mirage-cargo-wrapper.nix {
     inherit pkgs rustTarget;
   };

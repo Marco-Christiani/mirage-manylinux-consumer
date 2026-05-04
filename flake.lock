@@ -32,11 +32,11 @@
         "nixpkgs-24_05": "nixpkgs-24_05"
       },
       "locked": {
-        "lastModified": 1777769699,
-        "narHash": "sha256-Vcb6aO2W66r4ntNs0lztZvs6v+cMLck2U/UoTzZzFFU=",
+        "lastModified": 1777861308,
+        "narHash": "sha256-Ff+iE9XR9PrTVj15lYzopPb4LVyT7fwV8MrDwAMBbfk=",
         "owner": "Marco-Christiani",
         "repo": "nix-manylinux-envs",
-        "rev": "acc9145171c38b5cfb12c72ddd48755f675e0183",
+        "rev": "cad87b89da965da797c728e81b7432342420c553",
         "type": "github"
       },
       "original": {

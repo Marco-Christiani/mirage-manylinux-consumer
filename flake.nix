@@ -38,15 +38,9 @@
         pythonImage = "python:3.13-slim";
       };
     };
-    policyTargets = {
-      manylinux_2_28 = {
-        targetAttr = "manylinux_2_28_candidate";
-        rustTarget = "x86_64-unknown-linux-gnu.2.28";
-      };
-      manylinux_2_34 = {
-        targetAttr = "manylinux_2_34_candidate";
-        rustTarget = "x86_64-unknown-linux-gnu.2.34";
-      };
+    policyTargetNames = {
+      manylinux_2_28 = "manylinux_2_28_candidate";
+      manylinux_2_34 = "manylinux_2_34_candidate";
     };
     cudaTargets = {
       cuda128.cudaAttr = "cudaPackages_12_8";
@@ -59,15 +53,15 @@
             policyName:
               map (cudaName: let
                 py = pythonTargets.${pyName};
-                policy = policyTargets.${policyName};
+                policyTargetAttr = policyTargetNames.${policyName};
                 cuda = cudaTargets.${cudaName};
               in {
                 name = "${pyName}-${policyName}-${cudaName}";
-                value = py // policy // cuda;
+                value = py // {inherit policyTargetAttr;} // cuda;
               })
               (builtins.attrNames cudaTargets)
           )
-          (builtins.attrNames policyTargets)
+          (builtins.attrNames policyTargetNames)
       )
       (builtins.attrNames pythonTargets)
     );
@@ -90,20 +84,22 @@
   in {
     packages = forAllSystems (system: let
       pkgs = mkPkgs system;
-      mkMirageWheel = target:
+      manylinuxTargets = manylinux-env.legacyPackages.${system}.buildTargets;
+      mkMirageWheel = target: let
+        manylinuxTarget = manylinuxTargets.${target.policyTargetAttr};
+      in
         import ./nix/mirage-wheel.nix {
           inherit pkgs manylinux-env mirage-src system;
           inherit (pkgs) lib;
-          inherit (target) targetAttr rustTarget;
+          inherit (manylinuxTarget) targetAttr targetShell rustTarget;
           cudaPackages = pkgs.${target.cudaAttr};
           pythonInterpreter = pkgs.${target.pythonAttr};
           repairMode = target.repairMode or "target";
         };
       defaultTarget = {
         pythonAttr = "python312";
-        targetAttr = "manylinux_2_28_candidate";
+        policyTargetAttr = "manylinux_2_28_candidate";
         cudaAttr = "cudaPackages_12_9";
-        rustTarget = "x86_64-unknown-linux-gnu.2.28";
       };
     in
       {
