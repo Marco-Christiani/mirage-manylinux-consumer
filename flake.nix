@@ -57,7 +57,13 @@
                 cuda = cudaTargets.${cudaName};
               in {
                 name = "${pyName}-${policyName}-${cudaName}";
-                value = py // {inherit policyTargetAttr;} // cuda;
+                value =
+                  py
+                  // {
+                    inherit cudaName policyName policyTargetAttr pyName;
+                    cacheVolume = "mirage-pip-cache-${pyName}";
+                  }
+                  // cuda;
               })
               (builtins.attrNames cudaTargets)
           )
@@ -73,6 +79,15 @@
         })
         systems
       );
+    releaseMatrix =
+      map (name: let
+        target = releaseTargets.${name};
+      in {
+        inherit name;
+        package = name;
+        inherit (target) cacheVolume cudaName policyName pyName pythonImage;
+      })
+      (builtins.attrNames releaseTargets);
     mkPkgs = system:
       import nixpkgs {
         inherit system;
@@ -84,6 +99,7 @@
   in {
     apps = forAllSystems (system: let
       pkgs = mkPkgs system;
+      releaseMatrixJson = pkgs.writeText "mirage-release-matrix.json" (builtins.toJSON releaseMatrix);
       verifyMirageWheel = pkgs.writeShellApplication {
         name = "verify-mirage-wheel";
         text = ''
@@ -96,16 +112,35 @@
             --import-code 'import mirage; from mirage import *; print("mirage", "DTensor" in globals())'
         '';
       };
+      verifyMirageMatrix = pkgs.writeShellApplication {
+        name = "verify-mirage-matrix";
+        runtimeInputs = [
+          pkgs.coreutils
+          pkgs.jq
+          pkgs.nix
+        ];
+        text = ''
+          export MIRAGE_RELEASE_MATRIX_JSON=${releaseMatrixJson}
+          export VERIFY_MIRAGE_WHEEL=${verifyMirageWheel}/bin/verify-mirage-wheel
+          exec bash ${./scripts/verify_mirage_matrix.sh} "$@"
+        '';
+      };
     in {
       verify-mirage-wheel = {
         type = "app";
         program = "${verifyMirageWheel}/bin/verify-mirage-wheel";
         meta.description = "Verify a Mirage wheel in a Python container with Mirage runtime dependencies";
       };
+      verify-mirage-matrix = {
+        type = "app";
+        program = "${verifyMirageMatrix}/bin/verify-mirage-matrix";
+        meta.description = "Build and verify Mirage release-matrix wheels";
+      };
     });
 
     packages = forAllSystems (system: let
       pkgs = mkPkgs system;
+      releaseMatrixJson = pkgs.writeText "mirage-release-matrix.json" (builtins.toJSON releaseMatrix);
       manylinuxTargets = manylinux-env.legacyPackages.${system}.buildTargets;
       mkMirageWheel = target: let
         manylinuxTarget = manylinuxTargets.${target.policyTargetAttr};
@@ -128,6 +163,7 @@
         default = self.packages.${system}.mirage-wheel;
         mirage-wheel = mkMirageWheel defaultTarget;
         mirage-wheel-raw = mkMirageWheel (defaultTarget // {repairMode = "none";});
+        release-matrix-json = releaseMatrixJson;
       }
       // builtins.mapAttrs (
         _: mkMirageWheel
